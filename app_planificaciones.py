@@ -132,6 +132,16 @@ class AppPlanificaciones(ctk.CTk):
         self.filtro_coord = ctk.CTkOptionMenu(self.left_panel, variable=self.coord_var, values=["Todos", "Isi", "Ale", "Sin Asignar"], command=self.aplicar_filtros)
         self.filtro_coord.pack(pady=5, padx=10, fill="x")
 
+        ctk.CTkLabel(self.left_panel, text="Año", font=ctk.CTkFont(size=12)).pack(pady=(5, 0))
+        self.anio_var = ctk.StringVar(value="Todos")
+        self.filtro_anio = ctk.CTkOptionMenu(self.left_panel, variable=self.anio_var, values=["Todos"], command=self.aplicar_filtros)
+        self.filtro_anio.pack(pady=5, padx=10, fill="x")
+
+        ctk.CTkLabel(self.left_panel, text="Área", font=ctk.CTkFont(size=12)).pack(pady=(5, 0))
+        self.area_var = ctk.StringVar(value="Todas")
+        self.filtro_area = ctk.CTkOptionMenu(self.left_panel, variable=self.area_var, values=["Todas"], command=self.aplicar_filtros)
+        self.filtro_area.pack(pady=5, padx=10, fill="x")
+
         # --- Contenedor Gráfico ---
         self.graph_frame = ctk.CTkFrame(self.left_panel)
         self.graph_frame.pack(pady=20, padx=10, fill="both", expand=True)
@@ -139,6 +149,12 @@ class AppPlanificaciones(ctk.CTk):
         # Panel Derecho (Tabla y Counters)
         self.right_panel = ctk.CTkFrame(self)
         self.right_panel.grid(row=0, column=1, padx=10, pady=10, sticky="nsew")
+
+        # Boton toggle para el panel izquierdo
+        self.btn_toggle_panel = ctk.CTkButton(self.right_panel, text="⬅ Ocultar Menú Lateral", 
+                                              command=self.toggle_left_panel, 
+                                              fg_color="#444", hover_color="#555", width=150)
+        self.btn_toggle_panel.pack(pady=(10, 0), padx=10, anchor="w")
 
         # --- Contenedor Counters ---
         self.counters_frame = ctk.CTkFrame(self.right_panel, fg_color="transparent")
@@ -175,7 +191,7 @@ class AppPlanificaciones(ctk.CTk):
         
         ctk.CTkLabel(self.view_selector_frame, text="Vista Actual:", font=ctk.CTkFont(weight="bold")).pack(side="left", padx=10)
         
-        self.btn_switch_view = ctk.CTkSegmentedButton(self.view_selector_frame, values=["Materias", "Docentes"], command=self.cambiar_vista_principal)
+        self.btn_switch_view = ctk.CTkSegmentedButton(self.view_selector_frame, values=["Materias", "Docentes", "Visor"], command=self.cambiar_vista_principal)
         self.btn_switch_view.set("Materias")
         self.btn_switch_view.pack(side="left", padx=10)
 
@@ -231,6 +247,28 @@ class AppPlanificaciones(ctk.CTk):
         # Inicialmente mostramos materias en el container
         self.tree.pack(fill="both", expand=True, side="left")
         self.tree_scroll.pack(side="right", fill="y")
+        
+        # --- Visor de Planificaciones ---
+        self.frame_visor = ctk.CTkFrame(self.frame_tablas, fg_color="transparent")
+        self.frame_visor.grid_rowconfigure(0, weight=0)
+        self.frame_visor.grid_rowconfigure(1, weight=1)
+        self.frame_visor.grid_columnconfigure(0, weight=1)
+        self.frame_visor.grid_columnconfigure(1, weight=3)
+        
+        # Barra superior del visor
+        self.visor_top_bar = ctk.CTkFrame(self.frame_visor, fg_color="transparent")
+        self.visor_top_bar.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 5))
+        
+        self.btn_toggle_visor_list = ctk.CTkButton(self.visor_top_bar, text="⬅ Ocultar Lista", 
+                                                   command=self.toggle_visor_list,
+                                                   fg_color="#444", hover_color="#555", width=120)
+        self.btn_toggle_visor_list.pack(side="left")
+        
+        self.visor_list_frame = ctk.CTkScrollableFrame(self.frame_visor, width=250)
+        self.visor_list_frame.grid(row=1, column=0, sticky="nsew", padx=(0,5))
+        
+        self.visor_detail_frame = ctk.CTkScrollableFrame(self.frame_visor)
+        self.visor_detail_frame.grid(row=1, column=1, sticky="nsew", padx=(5,0))
         
         # --- Botones de Acción para Docentes (Panel Principal) ---
         self.frame_acciones_docentes = ctk.CTkFrame(self.right_panel, fg_color="transparent")
@@ -417,10 +455,23 @@ class AppPlanificaciones(ctk.CTk):
                 return " - ".join(unificados)
 
             df_merged['Docente'] = df_merged['Docente_Raw'].apply(unificar_docentes)
-            
-            # Guardamos la base procesada (Materia Original para visualización)
-            self.df_base = df_merged[['Materia_Base', 'Docente', 'Estado']].copy()
+            # Guardamos la base procesada (completa para visualización)
+            self.df_base = df_merged.copy()
             self.df_base.rename(columns={'Materia_Base': 'Materia'}, inplace=True)
+            
+            # Sanitizamos nombres de columnas para facilitar
+            self.df_base.columns = [str(c).replace('\n', ' ').replace('\r', '').strip() for c in self.df_base.columns]
+            
+            # Actualizar opciones de filtros dinámicos
+            if 'ÁREA' in self.df_base.columns:
+                areas = sorted([str(v) for v in self.df_base['ÁREA'].dropna().unique() if str(v).strip()])
+                self.filtro_area.configure(values=["Todas"] + areas)
+                self.area_var.set("Todas")
+            
+            if 'AÑO' in self.df_base.columns:
+                anios = sorted([str(v) for v in self.df_base['AÑO'].dropna().unique() if str(v).strip() and str(v) != 'nan'])
+                self.filtro_anio.configure(values=["Todos"] + anios)
+                self.anio_var.set("Todos")
             
             self.actualizar_contadores_globales()
             self.aplicar_filtros()
@@ -449,6 +500,8 @@ class AppPlanificaciones(ctk.CTk):
 
         docente = self.docente_var.get().lower().strip()
         coord_f = self.coord_var.get()
+        anio_f = self.anio_var.get()
+        area_f = self.area_var.get()
         
         estados_permitidos = []
         if self.var_v.get(): estados_permitidos.append(ESTADO_LISTA)
@@ -486,6 +539,12 @@ class AppPlanificaciones(ctk.CTk):
 
             mask = df_filtered['Docente'].apply(check_coord)
             df_filtered = df_filtered[mask]
+
+        if anio_f != "Todos" and 'AÑO' in df_filtered.columns:
+            df_filtered = df_filtered[df_filtered['AÑO'].astype(str) == anio_f]
+            
+        if area_f != "Todas" and 'ÁREA' in df_filtered.columns:
+            df_filtered = df_filtered[df_filtered['ÁREA'].astype(str) == area_f]
 
         self.df_mostrado = df_filtered
 
@@ -606,18 +665,46 @@ class AppPlanificaciones(ctk.CTk):
         except Exception as e:
             messagebox.showerror("Error", f"No se pudo abrir el cliente de correo: {e}")
 
+    def toggle_left_panel(self):
+        if self.left_panel.winfo_ismapped():
+            self.left_panel.grid_remove()
+            self.grid_columnconfigure(0, weight=0)
+            self.btn_toggle_panel.configure(text="➡ Mostrar Menú Lateral")
+        else:
+            self.left_panel.grid()
+            self.grid_columnconfigure(0, weight=1)
+            self.btn_toggle_panel.configure(text="⬅ Ocultar Menú Lateral")
+
+    def toggle_visor_list(self):
+        if self.visor_list_frame.winfo_ismapped():
+            self.visor_list_frame.grid_remove()
+            self.frame_visor.grid_columnconfigure(0, weight=0)
+            self.btn_toggle_visor_list.configure(text="➡ Mostrar Lista")
+        else:
+            self.visor_list_frame.grid()
+            self.frame_visor.grid_columnconfigure(0, weight=1)
+            self.btn_toggle_visor_list.configure(text="⬅ Ocultar Lista")
+
     def cambiar_vista_principal(self, view):
         self.vista_actual = view
+        self.tree.pack_forget()
+        self.tree_hier.pack_forget()
+        self.frame_acciones_docentes.pack_forget()
+        self.tree_scroll.pack_forget()
+        if hasattr(self, 'frame_visor'):
+            self.frame_visor.pack_forget()
+
         if view == "Materias":
-            self.tree_hier.pack_forget()
-            self.frame_acciones_docentes.pack_forget()
             self.tree.pack(fill="both", expand=True, side="left")
+            self.tree_scroll.pack(side="right", fill="y")
             self.tree_scroll.configure(command=self.tree.yview)
-        else:
-            self.tree.pack_forget()
+        elif view == "Docentes":
             self.tree_hier.pack(fill="both", expand=True, side="left")
+            self.tree_scroll.pack(side="right", fill="y")
             self.frame_acciones_docentes.pack(fill="x", padx=10, pady=10)
             self.tree_scroll.configure(command=self.tree_hier.yview)
+        elif view == "Visor":
+            self.frame_visor.pack(fill="both", expand=True)
         
         self.actualizar_tabla()
 
@@ -628,10 +715,163 @@ class AppPlanificaciones(ctk.CTk):
             self.tree_hier.yview(*args)
 
     def actualizar_tabla(self):
+        if hasattr(self, 'visor_list_frame'):
+            # Clear details if switching
+            for widget in self.visor_detail_frame.winfo_children():
+                widget.destroy()
+
         if self.vista_actual == "Materias":
             self.actualizar_tabla_materias()
-        else:
+        elif self.vista_actual == "Docentes":
             self.actualizar_tabla_docentes()
+        elif self.vista_actual == "Visor":
+            self.actualizar_lista_visor()
+
+    def actualizar_lista_visor(self):
+        for widget in self.visor_list_frame.winfo_children():
+            widget.destroy()
+            
+        if self.df_mostrado is not None:
+            for index, row in self.df_mostrado.iterrows():
+                est = row.get('Estado', '')
+                colr = "white"
+                if est == ESTADO_LISTA: colr = "#8fce00"
+                elif est == ESTADO_FALTA_REVISION: colr = "#f1c40f"
+                elif est == ESTADO_NO_ENTREGADA: colr = "#e74c3c"
+                
+                texto_btn = f"{row.get('Materia', 'N/A')}\n({row.get('Docente', 'N/A')})"
+                btn = ctk.CTkButton(self.visor_list_frame, text=texto_btn, fg_color="#2b2b2b", 
+                                    text_color=colr, border_width=1, border_color="#555",
+                                    hover_color="#3b3b3b",
+                                    anchor="w", command=lambda idx=index: self.mostrar_detalle_visor(idx))
+                btn.pack(fill="x", pady=2, padx=2)
+
+    def mostrar_detalle_visor(self, index):
+        for widget in self.visor_detail_frame.winfo_children():
+            widget.destroy()
+            
+        if self.df_mostrado is None or index not in self.df_mostrado.index:
+            return
+            
+        row = self.df_mostrado.loc[index]
+        
+        # Titulo Principal
+        titulo = ctk.CTkLabel(self.visor_detail_frame, text=f"{row.get('Materia', '')} - {row.get('Docente', '')}", 
+                              font=ctk.CTkFont(size=20, weight="bold"))
+        titulo.pack(pady=(10, 20), anchor="w", fill="x")
+        
+        # Funciones auxiliares para clasificar columnas
+        columnas_ignorar = ['materia', 'materia_plan', 'materia_clean', 'docente', 'docente_raw', 
+                            'docentes_asignados', 'estado', 'materia_base', 'correo electrónico', 'hora de la última modificación',
+                            'id', 'hora de inicio', 'hora de finalización', 'nombre']
+                            
+        def debe_ignorar(col_str):
+            c = str(col_str).strip().lower()
+            if c in columnas_ignorar or 'unnamed' in c: return True
+            if 'revisión del coordinador' in c: return True
+            return False
+            
+        def es_basica(col_str):
+            c = str(col_str).strip().lower()
+            exactas = ['docente titular', 'pareja pedagógica', 'nombre de la materia', 'año', 'área', 'periodicidad', 'rotaciones anuales']
+            for kw in exactas:
+                if c == kw: return True
+            if c.startswith('duración semanal'): return True
+            return False
+            
+        def es_sin_rubrica(col_str):
+            c = str(col_str).strip().lower()
+            if 'aplicará abp' in c: return True
+            return False
+        # 1. Contenedor para info básica
+        info_frame = ctk.CTkFrame(self.visor_detail_frame, fg_color="#2b2b2b", corner_radius=8, border_width=1, border_color="#555")
+        info_frame.pack(fill="x", pady=(0, 20), ipadx=10, ipady=10)
+        
+        estado_val = row.get('Estado', '')
+        estado_color = "white"
+        if estado_val == ESTADO_LISTA: estado_color = "#8fce00"
+        elif estado_val == ESTADO_FALTA_REVISION: estado_color = "#f1c40f"
+        elif estado_val == ESTADO_NO_ENTREGADA: estado_color = "#e74c3c"
+        
+        ctk.CTkLabel(info_frame, text=f"• ESTADO: {estado_val}", font=ctk.CTkFont(size=14, weight="bold"), text_color=estado_color).pack(anchor="w", pady=(5, 10), padx=15)
+        
+        # Grid para items básicos dentro del contenedor
+        grid_frame = ctk.CTkFrame(info_frame, fg_color="transparent")
+        grid_frame.pack(fill="x", padx=15)
+        
+        # 4 columnas lógicas para 2 pares (Clave1, Valor1) espacio (Clave2, Valor2)
+        grid_frame.grid_columnconfigure(0, weight=0, minsize=140)
+        grid_frame.grid_columnconfigure(1, weight=1)
+        grid_frame.grid_columnconfigure(2, weight=0, minsize=30) # Separador
+        grid_frame.grid_columnconfigure(3, weight=0, minsize=140)
+        grid_frame.grid_columnconfigure(4, weight=1)
+        
+        row_idx = 0
+        col_group = 0
+        
+        for col in self.df_base.columns:
+            if debe_ignorar(col): continue
+            if es_basica(col):
+                val = row.get(col)
+                if pd.notna(val) and str(val).strip() != "":
+                    c_idx = 0 if col_group == 0 else 3
+                    
+                    # Clave en gris claro y negrita
+                    ctk.CTkLabel(grid_frame, text=f"{str(col).upper()}", font=ctk.CTkFont(size=12, weight="bold"), text_color="#aaaaaa").grid(row=row_idx, column=c_idx, sticky="nw", pady=2)
+                    # Valor en blanco
+                    ctk.CTkLabel(grid_frame, text=str(val), font=ctk.CTkFont(size=13), text_color="white", justify="left", wraplength=350).grid(row=row_idx, column=c_idx+1, sticky="w", pady=2, padx=(5,0))
+                    
+                    if col_group == 0:
+                        col_group = 1
+                    else:
+                        col_group = 0
+                        row_idx += 1
+        
+        # 2. Renderizar campos evaluables (con espacio para rúbrica)
+        import re
+        for col in self.df_base.columns:
+            if debe_ignorar(col) or es_basica(col):
+                continue
+                
+            val = row.get(col)
+            if pd.isna(val) or str(val).strip() == "":
+                continue
+                
+            frame_campo = ctk.CTkFrame(self.visor_detail_frame, fg_color="transparent")
+            frame_campo.pack(fill="x", pady=5) # Reducimos el padding de 10 a 5
+            
+            # Formato Encabezado + Botones de Link
+            header_frame = ctk.CTkFrame(frame_campo, fg_color="transparent")
+            header_frame.pack(fill="x")
+            
+            ctk.CTkLabel(header_frame, text=str(col).upper(), font=ctk.CTkFont(size=14, weight="bold"), text_color="#5fa8d3", wraplength=450, justify="left").pack(side="left", anchor="w")
+            
+            texto = str(val).strip()
+            
+            # Extraer links y poner botones
+            urls = re.findall(r'(https?://[^\s]+)', texto)
+            for url in urls:
+                btn_link = ctk.CTkButton(header_frame, text="Abrir Link", width=80, height=24, fg_color="#2b78e4", hover_color="#1a5bb8",
+                                         command=lambda u=url: webbrowser.open(u))
+                btn_link.pack(side="right", padx=5)
+            
+            # Contenido adaptado a pantallas más anchas
+            lineas = texto.count('\n') + (len(texto) // 170) + 1
+            altura = max(30, min(300, lineas * 16))
+            
+            txt_box = ctk.CTkTextbox(frame_campo, height=altura, wrap="word", fg_color="#2b2b2b", text_color="white")
+            txt_box.pack(fill="x", pady=(2,5))
+            txt_box.insert("0.0", texto)
+            txt_box.configure(state="disabled")
+            
+            # Rubrica dummy inferior (Si aplica)
+            if not es_sin_rubrica(col):
+                rub_frame = ctk.CTkFrame(frame_campo, fg_color="#333", corner_radius=5)
+                rub_frame.pack(fill="x", padx=10, pady=(0, 10))
+                ctk.CTkLabel(rub_frame, text="Evaluación de este campo (Futuro):", font=ctk.CTkFont(size=11, weight="bold")).pack(side="left", padx=10, pady=5)
+                
+                for score in [1, 2, 3, 4]:
+                    ctk.CTkRadioButton(rub_frame, text=str(score), variable=ctk.IntVar(), value=score, state="disabled", width=30).pack(side="left", padx=5)
 
     def actualizar_tabla_materias(self):
         # Limpiar tabla materias
@@ -837,6 +1077,7 @@ class AppPlanificaciones(ctk.CTk):
         cores_lista = [colores.get(l, '#999999') for l in labels]
 
 
+        plt.close('all') # Evitar fuga de memoria con figuras acumuladas
         fig, ax = plt.subplots(figsize=(4, 4), dpi=100)
         fig.patch.set_facecolor('#2b2b2b') # Fondo oscuro igual a CTk
         ax.set_facecolor('#2b2b2b')
