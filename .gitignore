@@ -1,0 +1,11 @@
+venv/
+.venv/
+.venv_broken/
+__pycache__/
+build/
+dist/
+*.spec
+*.db
+*.xlsx
+*.pdf
+.vscode/
